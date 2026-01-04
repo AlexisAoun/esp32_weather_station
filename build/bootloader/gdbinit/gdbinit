@@ -1,0 +1,2 @@
+source /home/pizza/esp/i2c/build/bootloader/gdbinit/symbols
+source /home/pizza/esp/i2c/build/bootloader/gdbinit/connect
