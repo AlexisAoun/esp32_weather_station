@@ -6,6 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/projdefs.h"
 #include "freertos/task.h"
+#include "hal/i2c_types.h"
 
 // I2C bus 
 #define I2C_PORT 0
@@ -19,6 +20,11 @@
 #define AHT20_SCL_SPEEH_HZ 100000
 #define AHT20_MEASUREMENT_COMMAND {0xAC, 0x33, 0x00}
 #define AHT20_MEASUREMENT_SIZE 7
+
+//BMP180
+#define BMP280_DEVICE_ADDRESS 0x77
+#define BMP280_SCL_SPEEH_HZ 100000
+#define BMP280_ID_REGISTER_ADDRESS 0xD0
 
 typedef struct {
     float temp;
@@ -36,6 +42,26 @@ static void init_i2c_port(i2c_master_bus_handle_t* bus_handle) {
 	};
 
 	ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_mst_config, bus_handle));
+}
+
+static void init_bm280(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handle_t bus_handle) {
+	i2c_device_config_t dev_cfg = {
+	    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+	    .device_address = BMP280_DEVICE_ADDRESS,
+	    .scl_speed_hz = BMP280_SCL_SPEEH_HZ,
+	};
+
+	ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &dev_cfg, dev_handle));
+
+	vTaskDelay(pdMS_TO_TICKS(100));
+    uint8_t id[1];
+    uint8_t please = 0xD0;
+    ESP_ERROR_CHECK(i2c_master_transmit(*dev_handle, &please, 1, -1));
+    ESP_ERROR_CHECK(i2c_master_receive(*dev_handle, id, 1, -1));
+
+    for(int i = 0; i < 1; i++) {
+        printf("id is : 0x%02X \n", id[i]);
+    }
 }
 
 static void init_aht20(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handle_t bus_handle) {
@@ -120,19 +146,21 @@ void app_main(void)
 {
     i2c_master_bus_handle_t i2c_bus_handle;
     i2c_master_dev_handle_t aht20_handle;
+    i2c_master_dev_handle_t bmp280_handle;
 
     init_i2c_port(&i2c_bus_handle);
-    init_aht20(&aht20_handle, i2c_bus_handle);
-
-	vTaskDelay(pdMS_TO_TICKS(100));
-
-	while(true) {
-	    uint8_t aht20_raw_data[AHT20_MEASUREMENT_SIZE];
-        aht20_read(aht20_handle, aht20_raw_data, AHT20_MEASUREMENT_SIZE);
-
-        Aht20_measurement aht20_measurement = compute_aht20_raw_data(aht20_raw_data);
-	    printf("Temp: %.2f°C, Humidity: %.2f%%\n", aht20_measurement.temp, aht20_measurement.hum);
-
-	    vTaskDelay(pdMS_TO_TICKS(1000));
-	}
+    init_bm280(&bmp280_handle, i2c_bus_handle);
+ //    init_aht20(&aht20_handle, i2c_bus_handle);
+	//
+	// vTaskDelay(pdMS_TO_TICKS(100));
+	//
+	// while(true) {
+	//     uint8_t aht20_raw_data[AHT20_MEASUREMENT_SIZE];
+ //        aht20_read(aht20_handle, aht20_raw_data, AHT20_MEASUREMENT_SIZE);
+	//
+ //        Aht20_measurement aht20_measurement = compute_aht20_raw_data(aht20_raw_data);
+	//     printf("Temp: %.2f°C, Humidity: %.2f%%\n", aht20_measurement.temp, aht20_measurement.hum);
+	//
+	//     vTaskDelay(pdMS_TO_TICKS(1000));
+	// }
 }
