@@ -1,8 +1,0 @@
-Command: ninja all
-[1/4] cd /home/pizza/esp/i2c/build && /home/pizza/.espressif/python_env/idf6.1_py3.14_env/bin/python /home/pizza/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/pizza/esp/i2c/build/partition_table/partition-table.bin /home/pizza/esp/i2c/build/i2c.bin
-i2c.bin binary size 0x26de0 bytes. Smallest app partition is 0x100000 bytes. 0xd9220 bytes (85%) free.
-[2/4] Performing build step for 'bootloader'
-[1/1] cd /home/pizza/esp/i2c/build/bootloader && /home/pizza/.espressif/python_env/idf6.1_py3.14_env/bin/python /home/pizza/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /home/pizza/esp/i2c/build/bootloader/bootloader.bin
-Bootloader binary size 0x66b0 bytes. 0x950 bytes (8%) free.
-[3/4] No install step for 'bootloader'
-[4/4] Completed 'bootloader'
