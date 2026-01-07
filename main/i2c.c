@@ -55,13 +55,29 @@ static void init_bm280(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handl
 
 	vTaskDelay(pdMS_TO_TICKS(100));
     uint8_t id[1];
-    uint8_t please = 0xD0;
-    ESP_ERROR_CHECK(i2c_master_transmit(*dev_handle, &please, 1, -1));
-    ESP_ERROR_CHECK(i2c_master_receive(*dev_handle, id, 1, -1));
+    uint8_t id_reg = 0xD0;
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(*dev_handle, &id_reg, 1, id, 1, -1));
+    //ESP_ERROR_CHECK(i2c_master_receive(*dev_handle, id, 1, -1));
 
     for(int i = 0; i < 1; i++) {
         printf("id is : 0x%02X \n", id[i]);
     }
+
+    uint8_t config[] = {0xF4, 0x93};
+    //ESP_ERROR_CHECK(i2c_master_transmit(*dev_handle, &config_reg, 1, -1));
+    ESP_ERROR_CHECK(i2c_master_transmit(*dev_handle, config, 2, -1));
+	vTaskDelay(pdMS_TO_TICKS(100));
+
+    uint8_t press_reg = 0xF7;
+    uint8_t raw_data[6];
+    size_t raw_data_length = 6;
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(*dev_handle, &press_reg, 1, raw_data, raw_data_length, -1));
+
+    printf("raw data : \n");
+    for(int i = 0; i < raw_data_length; i++) {
+        printf("0x%02X ", raw_data[i]);
+    }
+    printf("\n");
 }
 
 static void init_aht20(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handle_t bus_handle) {
