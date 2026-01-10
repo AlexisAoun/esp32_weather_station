@@ -21,10 +21,11 @@
 #define AHT20_MEASUREMENT_COMMAND {0xAC, 0x33, 0x00}
 #define AHT20_MEASUREMENT_SIZE 7
 
-//BMP180
+//BMP280
 #define BMP280_DEVICE_ADDRESS 0x77
 #define BMP280_SCL_SPEEH_HZ 100000
 #define BMP280_ID_REGISTER_ADDRESS 0xD0
+#define BMP280_CALIB_ADDRESS 0x88
 
 typedef struct {
     float temp;
@@ -63,11 +64,35 @@ static void init_bm280(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handl
         printf("id is : 0x%02X \n", id[i]);
     }
 
+
     uint8_t config[] = {0xF4, 0x93};
     //ESP_ERROR_CHECK(i2c_master_transmit(*dev_handle, &config_reg, 1, -1));
     ESP_ERROR_CHECK(i2c_master_transmit(*dev_handle, config, 2, -1));
 	vTaskDelay(pdMS_TO_TICKS(100));
 
+    uint8_t calib_reg = BMP280_CALIB_ADDRESS;
+    uint8_t calib_data[6];
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(*dev_handle, &calib_reg, 1, calib_data, 6, -1));
+
+    printf("calib data : \n");
+    for(int i = 0; i < 6; i++) {
+        printf("0x%02X ", calib_data[i]);
+    }
+    printf("\n");
+
+    for(int i = 0; i < 6; i+=2) {
+        printf("i = %i\n", i);
+        printf("%02X :", calib_data[i+1] << 8 | calib_data[i]);
+        printf("%li \n", (int32_t)calib_data[i+1] << 8 | calib_data[i]);
+    }
+    printf("\n");
+
+    // int16_t dig_T1 = (int16_t)calib_data[0] << 8 | calib_data[1];
+    // int16_t dig_T2 = (int16_t)calib_data[2] << 8 | calib_data[3];
+    //int16_t dig_T3 = (int16_t)calib_data[4] << 8 | calib_data[5];
+    int32_t dig_T1 = 27504;
+    int32_t dig_T2 = 26435;
+    int32_t dig_T3 = -1000;
     uint8_t press_reg = 0xF7;
     uint8_t raw_data[6];
     size_t raw_data_length = 6;
@@ -78,6 +103,25 @@ static void init_bm280(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handl
         printf("0x%02X ", raw_data[i]);
     }
     printf("\n");
+
+    // TODO the calc are correct, BUT the digs AND/OR the reading is false
+    int32_t adc_temp = 519888;
+    //int32_t adc_temp = (int32_t)raw_data[3] << 12 | raw_data[4] << 4 | raw_data[5] >> 4;
+    printf("%li", adc_temp);
+    // double var1, var2, T;
+    // var1 = (((double)adc_T)/16348.0 - ((double)dig_T1)/1024.0) * ((double)dig_T2);
+    // var2 = ((((double)adc_T)/131072.0 - ((double)dig_T1)/8192.0) * (((double)adc_T)/131072.0 - ((double)dig_T1)/8192.0)) * ((double)dig_T3);
+    //
+    // double t_fine = var1 + var2;
+    // T = t_fine / 5120.0;
+    int32_t var1, var2;
+
+    var1 = ((((adc_temp >> 3) - ((int32_t)dig_T1 << 1))) * (int32_t)dig_T2) >> 11;
+    var2 = (((((adc_temp >> 4) - (int32_t)dig_T1) * ((adc_temp >> 4) - (int32_t)dig_T1)) >> 12) * (int32_t)dig_T3) >> 14;
+
+    uint32_t fine_temp = var1 + var2;
+    int32_t T = (fine_temp * 5 + 128) >> 8;
+    printf("final temp : %ld \n", T);
 }
 
 static void init_aht20(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handle_t bus_handle) {
@@ -166,17 +210,17 @@ void app_main(void)
 
     init_i2c_port(&i2c_bus_handle);
     init_bm280(&bmp280_handle, i2c_bus_handle);
- //    init_aht20(&aht20_handle, i2c_bus_handle);
-	//
-	// vTaskDelay(pdMS_TO_TICKS(100));
-	//
-	// while(true) {
-	//     uint8_t aht20_raw_data[AHT20_MEASUREMENT_SIZE];
- //        aht20_read(aht20_handle, aht20_raw_data, AHT20_MEASUREMENT_SIZE);
-	//
- //        Aht20_measurement aht20_measurement = compute_aht20_raw_data(aht20_raw_data);
-	//     printf("Temp: %.2f°C, Humidity: %.2f%%\n", aht20_measurement.temp, aht20_measurement.hum);
-	//
-	//     vTaskDelay(pdMS_TO_TICKS(1000));
-	// }
+    init_aht20(&aht20_handle, i2c_bus_handle);
+
+	vTaskDelay(pdMS_TO_TICKS(100));
+
+	while(true) {
+	    uint8_t aht20_raw_data[AHT20_MEASUREMENT_SIZE];
+        aht20_read(aht20_handle, aht20_raw_data, AHT20_MEASUREMENT_SIZE);
+
+        Aht20_measurement aht20_measurement = compute_aht20_raw_data(aht20_raw_data);
+	    printf("Temp: %.2f°C, Humidity: %.2f%%\n", aht20_measurement.temp, aht20_measurement.hum);
+
+	    vTaskDelay(pdMS_TO_TICKS(1000));
+	}
 }
