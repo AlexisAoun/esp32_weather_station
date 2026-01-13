@@ -45,7 +45,7 @@ static void init_i2c_port(i2c_master_bus_handle_t* bus_handle) {
 	ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_mst_config, bus_handle));
 }
 
-static void init_bm280(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handle_t bus_handle) {
+static void init_bm280(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handle_t bus_handle, uint16_t* dig_t1, int16_t* dig_t2, int16_t* dig_t3) {
 	i2c_device_config_t dev_cfg = {
 	    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
 	    .device_address = BMP280_DEVICE_ADDRESS,
@@ -58,70 +58,46 @@ static void init_bm280(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handl
     uint8_t id[1];
     uint8_t id_reg = 0xD0;
     ESP_ERROR_CHECK(i2c_master_transmit_receive(*dev_handle, &id_reg, 1, id, 1, -1));
-    //ESP_ERROR_CHECK(i2c_master_receive(*dev_handle, id, 1, -1));
 
+    //TODO error handling
     for(int i = 0; i < 1; i++) {
         printf("id is : 0x%02X \n", id[i]);
     }
 
-
     uint8_t config[] = {0xF4, 0x93};
-    //ESP_ERROR_CHECK(i2c_master_transmit(*dev_handle, &config_reg, 1, -1));
     ESP_ERROR_CHECK(i2c_master_transmit(*dev_handle, config, 2, -1));
 	vTaskDelay(pdMS_TO_TICKS(100));
 
     uint8_t calib_reg = BMP280_CALIB_ADDRESS;
-    uint8_t calib_data[6];
-    ESP_ERROR_CHECK(i2c_master_transmit_receive(*dev_handle, &calib_reg, 1, calib_data, 6, -1));
+    uint8_t calib_data[24];
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(*dev_handle, &calib_reg, 1, calib_data, 24, -1));
 
     printf("calib data : \n");
-    for(int i = 0; i < 6; i++) {
+    for(int i = 0; i < 24; i++) {
         printf("0x%02X ", calib_data[i]);
     }
     printf("\n");
 
-    for(int i = 0; i < 6; i+=2) {
-        printf("i = %i\n", i);
-        printf("%02X :", calib_data[i+1] << 8 | calib_data[i]);
-        printf("%li \n", (int32_t)calib_data[i+1] << 8 | calib_data[i]);
-    }
-    printf("\n");
+    *dig_t1 = (uint16_t)calib_data[1] << 8 | calib_data[0];
+    *dig_t2 = (int16_t)calib_data[3] << 8 | calib_data[2];
+    *dig_t3 = (int16_t)calib_data[5] << 8 | calib_data[4];
+}
 
-    // int16_t dig_T1 = (int16_t)calib_data[0] << 8 | calib_data[1];
-    // int16_t dig_T2 = (int16_t)calib_data[2] << 8 | calib_data[3];
-    //int16_t dig_T3 = (int16_t)calib_data[4] << 8 | calib_data[5];
-    int32_t dig_T1 = 27504;
-    int32_t dig_T2 = 26435;
-    int32_t dig_T3 = -1000;
+float bmp280_read(i2c_master_dev_handle_t dev_handle, uint16_t dig_t1, int16_t dig_t2, int16_t dig_t3) {
     uint8_t press_reg = 0xF7;
     uint8_t raw_data[6];
     size_t raw_data_length = 6;
-    ESP_ERROR_CHECK(i2c_master_transmit_receive(*dev_handle, &press_reg, 1, raw_data, raw_data_length, -1));
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(dev_handle, &press_reg, 1, raw_data, raw_data_length, -1));
 
-    printf("raw data : \n");
-    for(int i = 0; i < raw_data_length; i++) {
-        printf("0x%02X ", raw_data[i]);
-    }
-    printf("\n");
-
-    // TODO the calc are correct, BUT the digs AND/OR the reading is false
-    int32_t adc_temp = 519888;
-    //int32_t adc_temp = (int32_t)raw_data[3] << 12 | raw_data[4] << 4 | raw_data[5] >> 4;
-    printf("%li", adc_temp);
-    // double var1, var2, T;
-    // var1 = (((double)adc_T)/16348.0 - ((double)dig_T1)/1024.0) * ((double)dig_T2);
-    // var2 = ((((double)adc_T)/131072.0 - ((double)dig_T1)/8192.0) * (((double)adc_T)/131072.0 - ((double)dig_T1)/8192.0)) * ((double)dig_T3);
-    //
-    // double t_fine = var1 + var2;
-    // T = t_fine / 5120.0;
+    int32_t adc_temp = (int32_t)raw_data[3] << 12 | raw_data[4] << 4 | raw_data[5] >> 4;
     int32_t var1, var2;
 
-    var1 = ((((adc_temp >> 3) - ((int32_t)dig_T1 << 1))) * (int32_t)dig_T2) >> 11;
-    var2 = (((((adc_temp >> 4) - (int32_t)dig_T1) * ((adc_temp >> 4) - (int32_t)dig_T1)) >> 12) * (int32_t)dig_T3) >> 14;
+    var1 = ((((adc_temp >> 3) - ((int32_t)dig_t1 << 1))) * (int32_t)dig_t2) >> 11;
+    var2 = (((((adc_temp >> 4) - (int32_t)dig_t1) * ((adc_temp >> 4) - (int32_t)dig_t1)) >> 12) * (int32_t)dig_t3) >> 14;
 
     uint32_t fine_temp = var1 + var2;
     int32_t T = (fine_temp * 5 + 128) >> 8;
-    printf("final temp : %ld \n", T);
+    return (float)T / 100;
 }
 
 static void init_aht20(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handle_t bus_handle) {
@@ -208,8 +184,11 @@ void app_main(void)
     i2c_master_dev_handle_t aht20_handle;
     i2c_master_dev_handle_t bmp280_handle;
 
+    uint16_t dig_t1; 
+    int16_t dig_t2, dig_t3;
+
     init_i2c_port(&i2c_bus_handle);
-    init_bm280(&bmp280_handle, i2c_bus_handle);
+    init_bm280(&bmp280_handle, i2c_bus_handle, &dig_t1, &dig_t2, &dig_t3);
     init_aht20(&aht20_handle, i2c_bus_handle);
 
 	vTaskDelay(pdMS_TO_TICKS(100));
@@ -217,9 +196,11 @@ void app_main(void)
 	while(true) {
 	    uint8_t aht20_raw_data[AHT20_MEASUREMENT_SIZE];
         aht20_read(aht20_handle, aht20_raw_data, AHT20_MEASUREMENT_SIZE);
+        float bmp280_temp = bmp280_read(bmp280_handle, dig_t1, dig_t2, dig_t3);
 
         Aht20_measurement aht20_measurement = compute_aht20_raw_data(aht20_raw_data);
-	    printf("Temp: %.2f°C, Humidity: %.2f%%\n", aht20_measurement.temp, aht20_measurement.hum);
+	    printf("From AHT20 : Temp: %.2f°C, Humidity: %.2f%%\n", aht20_measurement.temp, aht20_measurement.hum);
+	    printf("From BMP280 : Temp: %.2f°C\n", bmp280_temp);
 
 	    vTaskDelay(pdMS_TO_TICKS(1000));
 	}
