@@ -25,9 +25,15 @@
 #define BMP280_DEVICE_ADDRESS 0x77
 #define BMP280_SCL_SPEEH_HZ 100000
 #define BMP280_ID_REGISTER_ADDRESS 0xD0
+#define BMP280_EXPECTED_ID 0x58
 #define BMP280_CALIB_ADDRESS 0x88
 #define BMP280_PRESSION_ADDRESS 0xF7
 #define BMP280_MEASUREMENT_SIZE 6
+
+// Looking at the docs 0x1700 until 0x2000 is not used by any build in errors
+// https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/error-codes.html
+#define BASE_ERROR_CODE 0x1700
+#define ESP_ERR_BMP280_INIT_FAIL BASE_ERROR_CODE
 
 typedef struct {
     float temp;
@@ -67,7 +73,7 @@ static void init_i2c_port(i2c_master_bus_handle_t* bus_handle) {
 	ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_mst_config, bus_handle));
 }
 
-static void init_bm280(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handle_t bus_handle, Bmp280_calibration* calib) {
+static esp_err_t init_bm280(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handle_t bus_handle, Bmp280_calibration* calib) {
 	i2c_device_config_t dev_cfg = {
 	    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
 	    .device_address = BMP280_DEVICE_ADDRESS,
@@ -78,14 +84,15 @@ static void init_bm280(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handl
 
 	vTaskDelay(pdMS_TO_TICKS(100));
     uint8_t id[1];
-    uint8_t id_reg = 0xD0;
+    uint8_t id_reg = BMP280_ID_REGISTER_ADDRESS;
     ESP_ERROR_CHECK(i2c_master_transmit_receive(*dev_handle, &id_reg, 1, id, 1, -1));
 
-    //TODO error handling
-    for(int i = 0; i < 1; i++) {
-        printf("id is : 0x%02X \n", id[i]);
+    // For some reason can't get ESP_RETURN_ON_FALSE working, doing it manually
+    if (id[0] != BMP280_EXPECTED_ID) {
+        return ESP_ERR_BMP280_INIT_FAIL;
     }
 
+    // TODO remove magic number
     uint8_t config[] = {0xF4, 0x93};
     ESP_ERROR_CHECK(i2c_master_transmit(*dev_handle, config, 2, -1));
 	vTaskDelay(pdMS_TO_TICKS(100));
@@ -112,6 +119,8 @@ static void init_bm280(i2c_master_dev_handle_t* dev_handle, i2c_master_bus_handl
     calib->dig_p7 = (int16_t)calib_data[19] << 8 | calib_data[18];
     calib->dig_p8 = (int16_t)calib_data[21] << 8 | calib_data[20];
     calib->dig_p9 = (int16_t)calib_data[23] << 8 | calib_data[22];
+
+    return ESP_OK;
 }
 
 void bmp280_read(i2c_master_dev_handle_t dev_handle, uint8_t* raw_data) {
