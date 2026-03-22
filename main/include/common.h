@@ -30,7 +30,7 @@
 #include "nimble/nimble_port_freertos.h"
 
 /* Defines */
-#define TAG "monkey"
-#define DEVICE_NAME "monkey"
+#define TAG "Test sensor"
+#define DEVICE_NAME "Test sensor"
 
 #endif // COMMON_H

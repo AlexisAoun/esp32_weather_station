@@ -3,28 +3,33 @@
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
-/* Includes */
 #include "gatt_svc.h"
 #include "common.h"
 #include "freertos/FreeRTOS.h"
 #include "esp_err.h"
+#include "host/ble_uuid.h"
+#include <stdint.h>
 
-/* Private function declarations */
 static int atmospheric_chr_access(uint16_t conn_handle, uint16_t attr_handle,
                                  struct ble_gatt_access_ctxt *ctxt, void *arg);
 
-/* Private variables */
-static const ble_uuid16_t atmospheric_svc_uuid = BLE_UUID16_INIT(0x180D);
+static const ble_uuid16_t atmospheric_svc_uuid = BLE_UUID16_INIT(0x181A);
 
 struct atm_data {
     int16_t temp;
     uint16_t press;
-    uint16_t humid;
+    uint16_t hum;
 } __attribute__((packed));
 
 static struct atm_data atmospheric_chr_val = {0,0,0};
 static uint16_t atmospheric_chr_val_handle;
-static const ble_uuid16_t atmospheric_chr_uuid = BLE_UUID16_INIT(0x2A37);
+static const ble_uuid128_t atmospheric_chr_uuid = {
+    .u.type = BLE_UUID_TYPE_128,
+    .value = {
+        0xb2, 0xb5, 0x48, 0x3e, 0x36, 0xe1, 0x46, 0x77, 
+        0xb8, 0xf5, 0xea, 0x17, 0x36, 0x1b, 0x26, 0xa8
+    }
+};
 
 static uint16_t atmospheric_chr_conn_handle = BLE_HS_CONN_HANDLE_NONE;
 static bool atmospheric_chr_conn_handle_inited = false;
@@ -37,7 +42,7 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
      .characteristics =
          (struct ble_gatt_chr_def[]){
              {              
-              .uuid = &atmospheric_chr_uuid.u,
+              .uuid = (ble_uuid_t *)&atmospheric_chr_uuid,
               .access_cb = atmospheric_chr_access,
               .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_INDICATE,
               .val_handle = &atmospheric_chr_val_handle},
@@ -49,7 +54,6 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
     },
 };
 
-/* Private functions */
 static int atmospheric_chr_access(uint16_t conn_handle, uint16_t attr_handle,
                                  struct ble_gatt_access_ctxt *ctxt, void *arg) {
     /* Local variables */
@@ -171,6 +175,12 @@ void gatt_svr_reset_atmospheric_subscription(void) {
     atmospheric_chr_conn_handle = BLE_HS_CONN_HANDLE_NONE;
     atmospheric_chr_conn_handle_inited = false;
     atmospheric_ind_status = false;
+}
+
+void set_atm_values(uint16_t temp, int16_t press, int16_t hum) {
+   atmospheric_chr_val.temp = temp; 
+   atmospheric_chr_val.press = press; 
+   atmospheric_chr_val.hum = hum; 
 }
 
 /*

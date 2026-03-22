@@ -1,7 +1,9 @@
+#include "sensors.h"
 #include "common.h"
 #include "gap.h"
 #include "gatt_svc.h"
 
+static sensors_config_t sensors_config;
 /* Library function declarations */
 void ble_store_config_init(void);
 
@@ -55,7 +57,16 @@ static void atm_sensor_task(void *param) {
 
     /* Loop forever */
     while (1) {
-        /* Send heart rate indication if enabled */
+        sensor_data_t sensor_data;
+        ESP_ERROR_CHECK(read_sensors_data(sensors_config, &sensor_data));
+
+        int16_t packed_temp = (int16_t)(sensor_data.temperature * 100.0f + (sensor_data.temperature >= 0 ? 0.5f : -0.5f));
+        uint16_t packed_hum = (int16_t)(sensor_data.humidity * 10.0f + 0.5f);
+        uint16_t packed_press = (int16_t)(sensor_data.pressure / 10.0f + 0.5f);;
+
+        printf("Temp: %d°C, Hum : %d, Pressure: %dPa\n", packed_temp, packed_hum, packed_press);
+        set_atm_values(packed_temp, packed_press, packed_hum);
+
         send_atmospheric_indication();
 
         /* Sleep */
@@ -67,7 +78,6 @@ static void atm_sensor_task(void *param) {
 }
 
 void app_main(void) {
-    /* Local variables */
     BaseType_t rc = 0;
     esp_err_t ret;
 
@@ -103,6 +113,8 @@ void app_main(void) {
     }
 #endif
 
+    ESP_ERROR_CHECK(init_sensors(&sensors_config));
+
     /* GATT server initialization */
     rc = gatt_svc_init();
     if (rc != 0) {
@@ -123,21 +135,10 @@ void app_main(void) {
 
     rc = xTaskCreate(atm_sensor_task, "ATM sensor", 4 * 1024, NULL, 5, NULL);
     if (rc != pdPASS) {
-        ESP_LOGE(TAG, "failed to create heart rate task");
+        ESP_LOGE(TAG, "failed to create ATM sensor task");
         return;
     }
+
     return;
 }
-// void app_main(void)
-// {
-//     sensor_data_t sensor_data; 
-//     sensors_config_t sensors_config;
-//
-//     ESP_ERROR_CHECK(init_sensors(&sensors_config));
-//
-//     while(true) {
-//         ESP_ERROR_CHECK(read_sensors_data(sensors_config, &sensor_data));
-//         printf("Temp: %.2f°C, Hum : %.2f%%, Pressure: %.2f Pa\n", sensor_data.temperature, sensor_data.humidity, sensor_data.pressure);
-//         vTaskDelay(pdMS_TO_TICKS(1000));
-//    }
-// }
+
