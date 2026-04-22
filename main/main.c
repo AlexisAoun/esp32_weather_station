@@ -61,13 +61,12 @@ static void atm_sensor_task(void *param) {
         ESP_ERROR_CHECK(read_sensors_data(sensors_config, &sensor_data));
 
         int16_t packed_temp = (int16_t)(sensor_data.temperature * 100.0f + (sensor_data.temperature >= 0 ? 0.5f : -0.5f));
-        uint16_t packed_hum = (int16_t)(sensor_data.humidity * 10.0f + 0.5f);
-        uint16_t packed_press = (int16_t)(sensor_data.pressure / 10.0f + 0.5f);;
+        uint16_t packed_hum = (uint16_t)(sensor_data.humidity * 10.0f + 0.5f);
+        uint16_t packed_press = (uint16_t)(sensor_data.pressure / 10.0f + 0.5f);
 
-        printf("Temp: %d°C, Hum : %d, Pressure: %dPa\n", packed_temp, packed_hum, packed_press);
+        printf("Temp: %d°C, Hum : %u, Pressure: %uPa\n", packed_temp, packed_hum, packed_press);
         set_atm_values(packed_temp, packed_press, packed_hum);
-
-        send_atmospheric_indication();
+        update_adv_data(packed_temp, packed_press, packed_hum);
 
         /* Sleep */
         vTaskDelay(1000);

@@ -18,5 +18,6 @@
 /* Public function declarations */
 void adv_init(void);
 int gap_init(void);
+void update_adv_data(int16_t temp, uint16_t press, uint16_t hum);
 
 #endif // GAP_SVC_H

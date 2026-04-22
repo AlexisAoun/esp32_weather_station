@@ -15,12 +15,6 @@ static int atmospheric_chr_access(uint16_t conn_handle, uint16_t attr_handle,
 
 static const ble_uuid16_t atmospheric_svc_uuid = BLE_UUID16_INIT(0x181A);
 
-struct atm_data {
-    int16_t temp;
-    uint16_t press;
-    uint16_t hum;
-} __attribute__((packed));
-
 static struct atm_data atmospheric_chr_val = {0,0,0};
 static uint16_t atmospheric_chr_val_handle;
 static const ble_uuid128_t atmospheric_chr_uuid = {
@@ -177,7 +171,7 @@ void gatt_svr_reset_atmospheric_subscription(void) {
     atmospheric_ind_status = false;
 }
 
-void set_atm_values(uint16_t temp, int16_t press, int16_t hum) {
+void set_atm_values(int16_t temp, uint16_t press, uint16_t hum) {
    atmospheric_chr_val.temp = temp; 
    atmospheric_chr_val.press = press; 
    atmospheric_chr_val.hum = hum; 

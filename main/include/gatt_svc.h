@@ -20,6 +20,6 @@ void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg);
 void gatt_svr_subscribe_cb(struct ble_gap_event *event);
 void gatt_svr_reset_atmospheric_subscription(void);
 int gatt_svc_init(void);
-void set_atm_values(uint16_t temp, int16_t press, int16_t hum);
+void set_atm_values(int16_t temp, uint16_t press, uint16_t hum);
 
 #endif // GATT_SVR_H

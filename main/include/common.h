@@ -33,4 +33,12 @@
 #define TAG "Test sensor"
 #define DEVICE_NAME "Test sensor"
 
+#define COMPANY_ID 0xFFFF
+
+struct atm_data {
+    int16_t temp;
+    uint16_t press;
+    uint16_t hum;
+} __attribute__((packed));
+
 #endif // COMMON_H

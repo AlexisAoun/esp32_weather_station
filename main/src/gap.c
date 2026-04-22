@@ -18,6 +18,8 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg);
 static uint8_t own_addr_type;
 static uint8_t addr_val[6] = {0};
 static uint8_t esp_uri[] = {BLE_GAP_URI_PREFIX_HTTPS, '/', '/', 'e', 's', 'p', 'r', 'e', 's', 's', 'i', 'f', '.', 'c', 'o', 'm'};
+static struct atm_data current_atm_data = {0};
+static bool atm_data_valid = false;
 
 /* Private functions */
 inline static void format_addr(char *addr_str, uint8_t addr[]) {
@@ -58,6 +60,7 @@ static void start_advertising(void) {
     struct ble_hs_adv_fields adv_fields = {0};
     struct ble_hs_adv_fields rsp_fields = {0};
     struct ble_gap_adv_params adv_params = {0};
+    uint8_t mfg_data[sizeof(struct atm_data) + 2];
 
     /* Set advertising flags */
     adv_fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
@@ -79,6 +82,15 @@ static void start_advertising(void) {
     /* Set device LE role */
     adv_fields.le_role = BLE_GAP_LE_ROLE_PERIPHERAL;
     adv_fields.le_role_is_present = 1;
+
+    /* Add manufacturer data if we have sensor readings */
+    if (atm_data_valid) {
+        uint16_t company_id = COMPANY_ID;
+        memcpy(mfg_data, &company_id, 2);
+        memcpy(mfg_data + 2, &current_atm_data, sizeof(struct atm_data));
+        adv_fields.mfg_data = mfg_data;
+        adv_fields.mfg_data_len = sizeof(mfg_data);
+    }
 
     /* Set advertisement fields */
     rc = ble_gap_adv_set_fields(&adv_fields);
@@ -107,8 +119,8 @@ static void start_advertising(void) {
         return;
     }
 
-    /* Set undirected connectable and general discoverable mode */
-    adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
+    /* Set non-connectable and general discoverable mode */
+    adv_params.conn_mode = BLE_GAP_CONN_MODE_NON;
     adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
 
     /* Set advertising interval */
@@ -306,4 +318,16 @@ int gap_init(void) {
         return rc;
     }
     return rc;
+}
+
+void update_adv_data(int16_t temp, uint16_t press, uint16_t hum) {
+    current_atm_data.temp = temp;
+    current_atm_data.press = press;
+    current_atm_data.hum = hum;
+    atm_data_valid = true;
+
+    /* If we are already advertising, update the data */
+    if (ble_gap_adv_active()) {
+        start_advertising();
+    }
 }
